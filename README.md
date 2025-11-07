@@ -1,5 +1,7 @@
 # Implementation of: Unveiling the Latent Directions of Reflection in Large Language Models
 
+[https://arxiv.org/abs/2508.16989](https://arxiv.org/abs/2508.16989)
+
 
 ## Installation
 
