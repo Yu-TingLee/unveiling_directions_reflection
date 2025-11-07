@@ -18,7 +18,7 @@ from myutils.my_utils import doc_to_text, cosine_sim, cot_preprocess
 def init_model_hook_hidden_states(model):
     def gen_hook_func_hidden_states(layer_idx, hidden_states):
         def get_hidden_states(module, input, output):
-            hidden_states[layer_idx].append(output[0])
+            hidden_states[layer_idx].append(output[0].detach().cpu().numpy())
         return get_hidden_states
 
     hidden_states = defaultdict(list)
@@ -120,8 +120,8 @@ def get_forward(args, model, tokenizer, json_items, hidden_states, selected_laye
 
         check_len = tokenizer.encode(cot_preprocess(doc_to_text(json_item, json_item["cot_messy"], wait_token="None")))
         #print(f"len1:{len(check_len)}")
-        if len(check_len) > 400:
-            continue
+        #if len(check_len) > 400:
+        #    continue
 
         embed_w1 = defaultdict(list)
 
@@ -136,7 +136,7 @@ def get_forward(args, model, tokenizer, json_items, hidden_states, selected_laye
 
             for layer, ascore in hidden_states.items():
                 if layer in selected_layers:
-                    embed_w1[layer].append(ascore[0].detach().cpu().numpy()[0])
+                    embed_w1[layer].append(ascore[0][0])
                 ascore.clear()
 
         if len(wait_token_2s) > 0:
@@ -155,7 +155,7 @@ def get_forward(args, model, tokenizer, json_items, hidden_states, selected_laye
 
                 for layer, ascore in hidden_states.items():
                     if layer in selected_layers:
-                        embed_w2[layer].append(ascore[0].detach().cpu().numpy()[0])
+                        embed_w2[layer].append(ascore[0][0])
                     ascore.clear()
 
             #outputs_temp = {}
@@ -204,7 +204,7 @@ def get_embed_sim(args, model, tokenizer, hidden_states, output_dir):
     wait_token_1s = args.wait_token_1#["Wait", "Alternatively", "Check"]
     wait_token_2s = args.wait_token_2#[]
 
-    batch_size = 16
+    batch_size = 1
 
     json_items = json.load(open(args.input_file,"r"))
 
@@ -233,12 +233,9 @@ def get_embed_sim(args, model, tokenizer, hidden_states, output_dir):
     selected_1 = copy.deepcopy(results)
 
 
-    vec_knowns = get_forward(args, model, tokenizer, json_items, hidden_states, selected_layers, wait_token_1s, wait_token_2s)
     vec_known = {}
+    vec_knowns = {}
 
-
-    for layer in vec_knowns.keys():
-        vec_known[layer] = np.average(vec_knowns[layer], axis=0)
 
     vec_known[-1] = vec_known_emb
     vec_knowns[-1] = vec_knowns_emb
@@ -247,7 +244,20 @@ def get_embed_sim(args, model, tokenizer, hidden_states, output_dir):
     json.dump(dict((x,y.tolist()) for x,y in vec_knowns.items()), open(os.path.join(output_dir, "seed_per_vec.json"), "w"), indent=2)
 
     if args.output_new_vec == 0:
+        results = defaultdict(list)
+        results[-1] = selected_1
+        selected_2 = copy.deepcopy(results)
+        json.dump(selected_1, open(os.path.join(output_dir, "result_embedding.json"), "w"), indent=2)
+        json.dump(selected_2, open(os.path.join(output_dir, "result_layers.json"), "w"), indent=2)
+        open(os.path.join(output_dir,"word_-1.txt"),"w").write("\n".join([x[0] for x in selected_1][:10]))
         return
+
+
+    vec_knowns_temp = get_forward(args, model, tokenizer, json_items, hidden_states, selected_layers, wait_token_1s, wait_token_2s)
+    vec_knowns.update(vec_knowns_temp)
+
+    for layer in vec_knowns.keys():
+        vec_known[layer] = np.average(vec_knowns[layer], axis=0)
 
     batch_size = 1
 

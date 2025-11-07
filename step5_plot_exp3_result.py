@@ -32,13 +32,14 @@ def get_score(input_dir, w_list, limit):
         json_files_paths = sorted(glob.glob(json_files_expr))
         if len(json_files_paths) >= 1:
             word_hit_count.add(w)
-            print(f"word hit:{w}, total:{len(word_hit_count)}")
+            #print(f"word hit:{w}, total:{len(word_hit_count)}")
 
             acc = parse_json_file(json_files_paths[0])
             weighted_avg_acc.append(acc)
     if len(weighted_avg_acc)  == len(w_list):
         return np.average(weighted_avg_acc)
     else:
+        print("sample count is not enough")
         return None
 
 def png_result(plot_data, plot_meta):
@@ -47,7 +48,7 @@ def png_result(plot_data, plot_meta):
     for plot_data_i in plot_data:
         plt.plot(plot_data_i["x"],
                  plot_data_i["y"],
-                 label=plot_data_i["label"],
+                 #label=plot_data_i["label"],
                  linestyle=plot_data_i["linestyle"]
                  )
     plt.legend(fontsize=14)
@@ -63,8 +64,9 @@ def tikz_result(plot_data, plot_meta):
     output_str+= ("""
     \\begin{tikzpicture}
     \\begin{axis}[
+        align=center,
         width=3.8cm,
-        height=3.5cm,
+        height=2.8cm,
         xlabel={$\\ell$},
         ylabel={Acc},
         legend pos=north west,
@@ -73,8 +75,8 @@ def tikz_result(plot_data, plot_meta):
         xmin=0, xmax=%s,
         ymin=-0.05, ymax=%s,
         title={%s},
-        title style={font=\\scriptsize},
-        label style={font=\\scriptsize},
+        title style={font=\\tiny},
+        label style={font=\\tiny},
         tick label style={font=\\tiny},
         legend style={font=\\tiny},
         legend pos=outer north east,
@@ -118,11 +120,11 @@ def parse_all_result(input_dir, steer_dir, output_dir, s_limit=2, limit=20, data
 
 
     model_map={
-        "qwen3b":"Qwen2.5-3B",
-        "gemma4b":"Gemma3-4B"
+        "MyQwen2.5-3B":"Qwen2.5-3B",
+        "gemma-3-4b-it":"Gemma3-4B"
     }
 
-    for top_k in [3,5]:
+    for top_k in [3,5, 8]:
         plot_data = []
         plot_meta = {}
 
@@ -140,6 +142,7 @@ def parse_all_result(input_dir, steer_dir, output_dir, s_limit=2, limit=20, data
                     if layer >=0:
                         w_list = ("".join(open(fname,"r").readlines())).strip().split("\n")
                         w_list = w_list[:top_k]
+                        print(f"get score:{top_k}, {fname}")
                         score = get_score(input_dir, w_list, limit)
                         if score is not None:
                             all_scores[layer] = score
@@ -177,20 +180,21 @@ def parse_all_result(input_dir, steer_dir, output_dir, s_limit=2, limit=20, data
 
         steer_type = f"steer_baseline"
         fname = os.path.join(steer_dir, steer_type, "word_-1.txt")
-        w_list = ("".join(open(fname, "r").readlines())).strip().split("\n")
-        w_list = w_list[:top_k]
-        score = get_score(input_dir, w_list, limit)
-        plot_data.append({
-            "x": [0, max_layer],
-            "y": [score] * 2,
-            "label": "embedding",
-            "linestyle": "dashed",
-            "color_tikz": f"c{11 + i}"
-        })
-        i += 1
+        if os.path.exists(fname):
+            w_list = ("".join(open(fname, "r").readlines())).strip().split("\n")
+            w_list = w_list[:top_k]
+            score = get_score(input_dir, w_list, limit)
+            plot_data.append({
+                "x": [0, max_layer],
+                "y": [score] * 2,
+                "label": "embedding",
+                "linestyle": "dashed",
+                "color_tikz": f"c{11 + i}"
+            })
+            i += 1
 
-        plot_meta["title_png"]=f"Accuracy of Instructions in Dataset {dataset_name},\nSelected by Top-{top_k} CosSim"
-        plot_meta["title_tikz"]=f"{model_map[model_name]}, Top-{top_k}"
+        plot_meta["title_png"]=f"Accuracy of Instructions in Dataset {dataset_name},\\\\Selected by Top-{top_k} CosSim"
+        plot_meta["title_tikz"]=f"{model_map[model_name]}, Top-{top_k} \\\\ {dataset_name} "
         plot_meta["fig_name_png"]=os.path.join(output_dir,f"png_exp3_{model_name}_{dataset_name}_{top_k}.png")
         plot_meta["fig_name_tikz"]=os.path.join(output_dir,f"exp3_{model_name}_{dataset_name}_{top_k}.tex")
         plot_meta["fig_name_tikz_2"]=os.path.join("all_exp3_latex_fig",f"exp3_{model_name}_{dataset_name}_{top_k}.tex")
@@ -202,15 +206,53 @@ def parse_all_result(input_dir, steer_dir, output_dir, s_limit=2, limit=20, data
 
 
 def run():
-    parse_all_result(input_dir="visualize/gsm8k_adv/qwen3b/step3" ,
-                    steer_dir="visualize/gsm8k_adv/qwen3b/step2" ,
-                    output_dir="visualize/gsm8k_adv/qwen3b/step5",
-                    s_limit=200,
-                    limit=2000,
-                    ymax=.6,
-                    dataset_name="gsm8k_adv",
-                    model_name="qwen3b"
-                    )
+    model_name="MyQwen2.5-3B"
+    parse_all_result(input_dir=f"visualize/gsm8k_adv/{model_name}/step3" ,
+                     steer_dir=f"visualize/gsm8k_adv/{model_name}/step2" ,
+                    output_dir=f"visualize/gsm8k_adv/{model_name}/step5",
+                     s_limit=200,
+                     limit=2000,
+                     ymax=.6,
+                     dataset_name="gsm8k_adv",
+                     model_name=model_name
+                     )
+
+    model_name="gemma-3-4b-it"
+    parse_all_result(input_dir=f"visualize/gsm8k_adv/{model_name}/step3" ,
+                     steer_dir=f"visualize/gsm8k_adv/{model_name}/step2" ,
+                     output_dir=f"visualize/gsm8k_adv/{model_name}/step5",
+                     s_limit=200,
+                     limit=2000,
+                     ymax=.9,
+                     dataset_name="gsm8k_adv",
+                     model_name=model_name
+                     )
+
+
+    model_name="MyQwen2.5-3B"
+    dataset_name="cruxeval_o_adv"
+    parse_all_result(input_dir=f"visualize/{dataset_name}/{model_name}/step3" ,
+                     steer_dir=f"visualize/{dataset_name}/{model_name}/step2" ,
+                     output_dir=f"visualize/{dataset_name}/{model_name}/step5",
+                     s_limit=200,
+                     limit=500,
+                     ymax=.2,
+                     dataset_name=dataset_name,
+                     model_name=model_name
+                     )
+
+    #model_name="MyQwen2.5-3B"
+    model_name="gemma-3-4b-it"
+    dataset_name="cruxeval_o_adv"
+    parse_all_result(input_dir=f"visualize/{dataset_name}/{model_name}/step3" ,
+                     steer_dir=f"visualize/{dataset_name}/{model_name}/step2" ,
+                     output_dir=f"visualize/{dataset_name}/{model_name}/step5",
+                     s_limit=200,
+                     limit=500,
+                     ymax=.4,
+                     dataset_name=dataset_name,
+                     model_name=model_name
+                     )
 
 
 

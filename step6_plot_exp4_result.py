@@ -43,7 +43,7 @@ def tikz_result(plot_data, plot_meta):
     \\begin{axis}[
         align=center,
         width=3.8cm,
-        height=3cm,
+        height=2.8cm,
         xlabel={$\\ell$},
         ylabel={Acc},
         legend pos=north west,
@@ -52,8 +52,8 @@ def tikz_result(plot_data, plot_meta):
         xmin=0, xmax=%s,
         ymin=-0.05, ymax=%s,
         title={%s},
-        title style={font=\\scriptsize},
-        label style={font=\\scriptsize},
+        title style={font=\\tiny},
+        label style={font=\\tiny},
         tick label style={font=\\tiny},
         legend style={font=\\tiny},
         legend pos=outer north east,
@@ -213,11 +213,11 @@ def parse_all_result(dataset_name, input_dir, output_dir, ymax, limit, model_nam
             #        })
 
 
-            plot_meta["title_png"] = f"{model_map[model_name]},\\\\ {dataset_name},\\\\ Intervene `{start_type}'"
-            plot_meta["title_tikz"] = f"{model_map[model_name]},\\\\ {dataset_name},\\\\ Intervene `{start_type}'"
-            plot_meta["fig_name_png"] = os.path.join(output_dir, f"png_exp4_{model_name}_{dataset_name}_{s}_{start_type.replace("<eos>","eos")}.png")
-            plot_meta["fig_name_tikz"] = os.path.join(output_dir, f"exp4_{model_name}_{dataset_name}_{s}_{start_type.replace("<eos>","eos")}.tex")
-            plot_meta["fig_name_tikz_2"] = os.path.join("all_exp4_latex_fig", f"exp4_{model_name}_{dataset_name}_{s}_{start_type.replace("<eos>","eos")}.tex")
+            plot_meta["title_png"] = f"{model_map[model_name]},\\\\ {dataset_name},\\\\ Intervene `{start_type.replace('%','\%').replace('#','\#')}'"
+            plot_meta["title_tikz"] = f"{model_map[model_name]},\\\\ {dataset_name},\\\\ Intervene `{start_type.replace('%','\%').replace('#','\#')}'"
+            plot_meta["fig_name_png"] = os.path.join(output_dir, f"png_exp4_{model_name}_{dataset_name}_{s}_{start_type.replace("<eos>","eos").replace("%","p")}.png")
+            plot_meta["fig_name_tikz"] = os.path.join(output_dir, f"exp4_{model_name}_{dataset_name}_{s}_{start_type.replace("<eos>","eos").replace("%","p")}.tex")
+            plot_meta["fig_name_tikz_2"] = os.path.join("all_exp4_latex_fig", f"exp4_{model_name}_{dataset_name}_{s}_{start_type.replace("<eos>","eos").replace("%","p")}.tex")
             plot_meta["ymax"] = ymax
             plot_meta["xmax"] = max_layers[model_name]
 
@@ -229,12 +229,20 @@ def parse_all_result(dataset_name, input_dir, output_dir, ymax, limit, model_nam
 
 def run():
 
+    ymax_dict={
+    ("MyQwen2.5-3B","gsm8k_adv"):0.6,
+    ("gemma-3-4b-it","gsm8k_adv"):0.9,
+    ("MyQwen2.5-3B","cruxeval_o_adv"):0.13,
+    ("gemma-3-4b-it","cruxeval_o_adv"):0.5,
+    }
+
     dataset_names=["gsm8k_adv","cruxeval_o_adv"]
     model_names=["MyQwen2.5-3B", "gemma-3-4b-it"]
     ymaxs=[0.7,0.4]
     limits=[2000, 500]
-    for dataset_name, limit, ymax in zip(dataset_names, limits, ymaxs):
+    for dataset_name, limit in zip(dataset_names, limits):
         for model_name in model_names:
+            ymax = ymax_dict[(model_name, dataset_name)]
             input_dir=f"visualize/{dataset_name}/{model_name}/step4"
             output_dir=f"visualize/{dataset_name}/{model_name}/step6"
             os.makedirs(output_dir, exist_ok=True)
