@@ -77,8 +77,7 @@ def _tikz(plot_data, plot_meta):
             f.write(out)
 
 
-# ---- instruction selection ------------------------------------
-
+# instruction selection
 def _avg_score(input_dir, w_list, limit):
     accs = []
     for w in w_list:
@@ -167,8 +166,7 @@ def _plot_exp3(input_dir, steer_dir, output_dir, s_limit, limit, dataset_name, y
         _tikz(plot_data, plot_meta)
 
 
-# ---- activation steering --------------------------------------
-
+# activation steering
 def _plot_exp4(dataset_name, input_dir, output_dir, ymax, limit, model_name, latex_dir):
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(latex_dir, exist_ok=True)

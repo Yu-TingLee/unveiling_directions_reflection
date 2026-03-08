@@ -15,7 +15,7 @@ from utils import doc_to_text, cosine_sim, cot_preprocess
 def init_model_hook_hidden_states(model):
     def gen_hook_func_hidden_states(layer_idx, hidden_states):
         def get_hidden_states(module, input, output):
-            hidden_states[layer_idx].append(output[0].detach().cpu().numpy())
+            hidden_states[layer_idx].append(output[0].detach().cpu().float().numpy())
         return get_hidden_states
 
     hidden_states = defaultdict(list)
@@ -46,10 +46,6 @@ def init_model(args, hook_hidden=True):
 
     return model, tokenizer, hidden_states
 
-
-
-
-
 def get_embed(args, model, tokenizer, json_items, wait_token_1s, wait_token_2s):
 
     wait_pos_1 = 2
@@ -60,9 +56,9 @@ def get_embed(args, model, tokenizer, json_items, wait_token_1s, wait_token_2s):
 
 
     if "Qwen" in model.__str__():
-        w1_embeds = model.model.embed_tokens.forward(torch.Tensor(w1_ids).to(int).to(model.device)).cpu().detach().numpy()
+        w1_embeds = model.model.embed_tokens.forward(torch.Tensor(w1_ids).to(int).to(model.device)).cpu().detach().float().numpy()
     else:
-        w1_embeds = model.language_model.embed_tokens.forward(torch.Tensor(w1_ids).to(int).to(model.device)).cpu().detach().numpy()
+        w1_embeds = model.language_model.embed_tokens.forward(torch.Tensor(w1_ids).to(int).to(model.device)).cpu().detach().float().numpy()
 
 
     if len(wait_token_2s) > 0:
@@ -70,9 +66,9 @@ def get_embed(args, model, tokenizer, json_items, wait_token_1s, wait_token_2s):
                   for w2 in wait_token_2s]
 
         if "Qwen" in model.__str__():
-            w2_embeds = model.model.embed_tokens.forward(torch.Tensor(w2_ids).to(int).to(model.device)).cpu().detach().numpy()
+            w2_embeds = model.model.embed_tokens.forward(torch.Tensor(w2_ids).to(int).to(model.device)).cpu().detach().float().numpy()
         else:
-            w2_embeds = model.language_model.embed_tokens.forward(torch.Tensor(w2_ids).to(int).to(model.device)).cpu().detach().numpy()
+            w2_embeds = model.language_model.embed_tokens.forward(torch.Tensor(w2_ids).to(int).to(model.device)).cpu().detach().float().numpy()
 
         wvecs = []
         for w1_embed in w1_embeds:

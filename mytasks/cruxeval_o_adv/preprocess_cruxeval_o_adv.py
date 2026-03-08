@@ -4,10 +4,6 @@ import itertools
 import subprocess
 import sys
 
-################### WARNING ############################
-# This task executes LLM generated code  on your machine
-########################################################
-
 def run_pass_fail_code(code_to_execute):
     """Execute Python code in a subprocess with a timeout.
     Returns True if the code runs successfully, otherwise False.
