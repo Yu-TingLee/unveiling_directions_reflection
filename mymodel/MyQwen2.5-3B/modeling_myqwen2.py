@@ -361,9 +361,20 @@ class MyQwen2RotaryEmbedding(nn.Module):
         self.original_max_seq_len = config.max_position_embeddings
 
         self.config = config
-        self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
 
-        inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
+        if self.rope_type == "default":
+            # 'default' was removed from ROPE_INIT_FUNCTIONS in transformers 5.x;
+            # compute standard RoPE inv_freq directly.
+            head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+            inv_freq = 1.0 / (
+                config.rope_theta
+                ** (torch.arange(0, head_dim, 2, dtype=torch.float32, device=device) / head_dim)
+            )
+            self.attention_scaling = 1.0
+        else:
+            self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
+            inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
+
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         self.original_inv_freq = self.inv_freq
 
@@ -387,7 +398,7 @@ class MyQwen2RotaryEmbedding(nn.Module):
 class MyQwen2Model(MyQwen2PreTrainedModel):
     def __init__(self, config: MyQwen2Config):
         super().__init__(config)
-        self.padding_idx = config.pad_token_id
+        self.padding_idx = getattr(config, 'pad_token_id', None)
         self.vocab_size = config.vocab_size
 
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
@@ -565,7 +576,7 @@ class MyQwen2Model(MyQwen2PreTrainedModel):
 
 @auto_docstring
 class MyQwen2ForCausalLM(MyQwen2PreTrainedModel, GenerationMixin):
-    _tied_weights_keys = ["lm_head.weight"]
+    _tied_weights_keys = {"lm_head.weight": "model.embed_tokens.weight"}
     _tp_plan = {"lm_head": "colwise_rep"}
     _pp_plan = {"lm_head": (["hidden_states"], ["logits"])}
 
@@ -676,12 +687,9 @@ class MyQwen2ForCausalLM(MyQwen2PreTrainedModel, GenerationMixin):
             streamer: Optional["BaseStreamer"] = None,
             negative_prompt_ids: Optional[torch.Tensor] = None,
             negative_prompt_attention_mask: Optional[torch.Tensor] = None,
-            use_model_defaults: Optional[bool] = None,
             custom_generate: Optional[str] = None,
             **kwargs,
     ) -> Union[GenerateOutput, torch.LongTensor]:
-        #print(f"Start Generate, inputs:{inputs}")
-        #print(f"pos_diff:{self.pos_diff}")
         results = super().generate(
             inputs,
             generation_config,
@@ -693,7 +701,6 @@ class MyQwen2ForCausalLM(MyQwen2PreTrainedModel, GenerationMixin):
             streamer,
             negative_prompt_ids,
             negative_prompt_attention_mask,
-            use_model_defaults,
             custom_generate,
             **kwargs
         )
@@ -847,13 +854,14 @@ class MyQwen2ForSequenceClassification(MyQwen2PreTrainedModel):
         else:
             batch_size = inputs_embeds.shape[0]
 
-        if self.config.pad_token_id is None and batch_size != 1:
+        _pad_token_id = getattr(self.config, 'pad_token_id', None)
+        if _pad_token_id is None and batch_size != 1:
             raise ValueError("Cannot handle batch sizes > 1 if no padding token is defined.")
-        if self.config.pad_token_id is None:
+        if _pad_token_id is None:
             last_non_pad_token = -1
         elif input_ids is not None:
             # To handle both left- and right- padding, we take the rightmost token that is not equal to pad_token_id
-            non_pad_mask = (input_ids != self.config.pad_token_id).to(logits.device, torch.int32)
+            non_pad_mask = (input_ids != _pad_token_id).to(logits.device, torch.int32)
             token_indices = torch.arange(input_ids.shape[-1], device=logits.device, dtype=torch.int32)
             last_non_pad_token = (token_indices * non_pad_mask).argmax(-1)
         else:

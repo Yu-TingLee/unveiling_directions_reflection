@@ -2,5 +2,9 @@ __pycache__/*
 venv/*
 visualize/*
 mymodels/*
-mytasks/curxeval_o_adv/__pycache__/*
+mymodel/MyGemma-3-4B-it/__pycache__/*
+mymodel/MyQwen2.5-3B/__pycache__/*
+mytasks/cruxeval_o_adv/__pycache__/*
 mytasks/gsm8k_adv/__pycache__/*
+test.sh
+visualize_test/

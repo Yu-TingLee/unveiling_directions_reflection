@@ -15,7 +15,6 @@
 """MyQwen2 model configuration"""
 
 from transformers.configuration_utils import PretrainedConfig, layer_type_validation
-from transformers.modeling_rope_utils import rope_config_validation
 from transformers.utils import logging
 
 
@@ -197,7 +196,8 @@ class MyQwen2Config(PretrainedConfig):
         # BC: if there is a 'type' field, move it to 'rope_type'.
         if self.rope_scaling is not None and "type" in self.rope_scaling:
             self.rope_scaling["rope_type"] = self.rope_scaling["type"]
-        rope_config_validation(self)
+        if hasattr(self, 'validate_rope'):
+            self.validate_rope()
 
         self.layer_types = layer_types
         if self.layer_types is None:

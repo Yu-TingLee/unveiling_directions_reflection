@@ -48,8 +48,7 @@ if [ -n "${HF_CACHE_DIR}" ]; then
     CACHE_ARG=(--cache_dir "${HF_CACHE_DIR}")
 fi
 
-# -- helpers ------------------------------------------------------------------
-
+# helpers
 get_limit() {
     if [ "${1}" = "cruxeval_o_adv" ]; then echo "${LIMIT_CRUXEVAL}"; else echo "${LIMIT_GSM8K}"; fi
 }
@@ -130,9 +129,7 @@ steer_direction() {
     done
 }
 
-# -- preprocess ---------------------------------------------------------------
-
-echo "preprocess"
+# preprocess
 for task_name in "${TASK_NAMES[@]}"; do
     python3 preprocess.py \
         --input_file="${DATASET_DIR}/${task_name}/train.json" \
@@ -140,9 +137,7 @@ for task_name in "${TASK_NAMES[@]}"; do
         --visualize_dir="${VISUALIZE_DIR}"
 done
 
-# -- run reflection levels ----------------------------------------------------
-
-echo "run reflection levels"
+# run reflection levels
 for model_name in "${MODEL_NAMES[@]}"; do
     for task_word in "${TASK_WORDS_LEVELS[@]}"; do
         for task_name in "${TASK_NAMES[@]}"; do
@@ -152,9 +147,7 @@ for model_name in "${MODEL_NAMES[@]}"; do
     done
 done
 
-# -- build steering vectors ---------------------------------------------------
-
-echo "build steering vectors"
+# build steering vectors
 for model_name in "${MODEL_NAMES[@]}"; do
     hf_id="${HF_ID[${model_name}]}"
     wait_token_l1="${WAIT_TOKEN_L1[${model_name}]}"
@@ -170,7 +163,7 @@ for model_name in "${MODEL_NAMES[@]}"; do
         build_one_vector "${input_file}" "${hf_id}" "${output_dir}/steer_${S_LIMIT}_10" \
             --wait_token_1 ${wait_token_l1} --wait_token_2 ${WAIT_TOKEN_L0}
         build_one_vector "${input_file}" "${hf_id}" "${output_dir}/steer_baseline" \
-            --is_baseline=1 --wait_token_1 ${WAIT_TOKEN_L2} --wait_token_2 ""
+            --is_baseline=1 --output_new_vec 0 --wait_token_1 ${WAIT_TOKEN_L2} --wait_token_2 ""
 
         for steer_type in "steer_${S_LIMIT}_21" "steer_${S_LIMIT}_20" "steer_${S_LIMIT}_10" "steer_baseline"; do
             python3 reselect_words.py \
@@ -180,9 +173,7 @@ for model_name in "${MODEL_NAMES[@]}"; do
     done
 done
 
-# -- instruction selection ----------------------------------------------------
-
-echo "instruction selection"
+# instruction selection
 TASK_NAME_STEP3="gsm8k_adv"
 for model_name in "${MODEL_NAMES[@]}"; do
     read -ra layers <<< "${MODEL_LAYERS[${model_name}]}"
@@ -199,9 +190,7 @@ for model_name in "${MODEL_NAMES[@]}"; do
     done
 done
 
-# -- activation steering ------------------------------------------------------
-
-echo "activation steering"
+# activation steering
 for model_name in "${MODEL_NAMES[@]}"; do
     read -ra layers <<< "${MODEL_LAYERS[${model_name}]}"
 
@@ -215,9 +204,7 @@ for model_name in "${MODEL_NAMES[@]}"; do
     done
 done
 
-# -- plot results -------------------------------------------------------------
-
-echo "plot results"
+# plot results
 python3 plot.py \
     --visualize_dir "${VISUALIZE_DIR}" \
     --model_names   "${MODEL_NAMES[@]}" \

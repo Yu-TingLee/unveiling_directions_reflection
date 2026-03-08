@@ -11,7 +11,7 @@ MODELS = {
 
 def setup(model_name, hf_id, models_dir, cache_dir):
     dest = os.path.join(models_dir, model_name)
-    print(f"downloading {hf_id} -> {dest}")
+    print(f"downloading {hf_id} to {dest}")
     snapshot_download(
         repo_id=hf_id,
         local_dir=dest,
@@ -20,7 +20,10 @@ def setup(model_name, hf_id, models_dir, cache_dir):
     )
     src = os.path.join("mymodel", model_name)
     for fname in os.listdir(src):
-        shutil.copy2(os.path.join(src, fname), os.path.join(dest, fname))
+        src_path = os.path.join(src, fname)
+        if not os.path.isfile(src_path):
+            continue
+        shutil.copy2(src_path, os.path.join(dest, fname))
         print(f"  copied {fname}")
 
 
