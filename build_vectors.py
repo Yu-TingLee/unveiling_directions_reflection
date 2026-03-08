@@ -289,14 +289,12 @@ def seed_everything(seed: int):
 def run():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", type=str, default="visualize/gsm8k_adv/step0/gsm8k_adv.json")
-    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-3B",
-                        help="HuggingFace model ID or path to a local model directory")
-    parser.add_argument("--cache_dir", type=str, default=None,
-                        help="Optional HuggingFace cache directory")
+    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-3B")
+    parser.add_argument("--cache_dir", type=str, default=None)
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--wait_token_1", type=str, default=["Wait", "Alternatively", "Check"], nargs='+')
     parser.add_argument("--wait_token_2", type=str, default=["Answer", "Result", "Output"], nargs='+')
-    parser.add_argument("--output_dir", type=str, default="visualize/gsm8k_adv/step1/steer_debug")
+    parser.add_argument("--output_dir", type=str, default="visualize/gsm8k_adv/step2/steer_200_20")
     parser.add_argument("--output_new_vec", type=int, default=1)
     parser.add_argument("--is_baseline", type=int, default=0)
     args = parser.parse_args()

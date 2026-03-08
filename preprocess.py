@@ -61,8 +61,7 @@ def run(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_file", type=str,
-                        default="mydataset/cruxeval_o_adv/train.json")
+    parser.add_argument("--input_file", type=str, default="mydataset/cruxeval_o_adv/train.json")
     parser.add_argument("--json_out_name", type=str, default="cruxeval_o_adv.json")
     parser.add_argument("--visualize_dir", type=str, default="visualize")
     args = parser.parse_args()

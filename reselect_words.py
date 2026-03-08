@@ -52,7 +52,7 @@ def run(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, default="visualize/gsm8k_adv/step1/steer_5_2")
+    parser.add_argument("--input_dir", type=str, default="visualize/gsm8k_adv/step2/steer_200_20")
     parser.add_argument("--word_limit", type=int, default=20)
     parser.add_argument("--exclude_words", nargs="+", default=["Wait", "Alternatively", "Check"],
                         help="Seed words to exclude from the selected word list")
