@@ -2,10 +2,11 @@
 
 This repository contains implementation for the paper **Unveiling the Latent Directions of Reflection in Large Language Models**. [https://arxiv.org/abs/2508.16989](https://arxiv.org/abs/2508.16989)
 
-```
 
+If you use gated Hugging Face models, export your token first:
+```sh
+export HF_TOKEN="<YOUR_TOKEN_HERE>"
 ```
-
 ## Setup venv
 
 ```sh

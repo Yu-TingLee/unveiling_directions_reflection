@@ -1,1 +1,6 @@
 __pycache__/*
+venv/*
+visualize/*
+mymodels/*
+mytasks/curxeval_o_adv/__pycache__/*
+mytasks/gsm8k_adv/__pycache__/*

@@ -5,12 +5,19 @@ source venv/bin/activate
 CUDA_VISIBLE_DEVICES="${1:-0}"
 export CUDA_VISIBLE_DEVICES NCCL_P2P_DISABLE=1 NCCL_IB_DISABLE=1
 
-QWEN_HF_ID="Qwen/Qwen2.5-3B"
-GEMMA_HF_ID="google/gemma-3-4b-it"
-QWEN_MODEL_NAME="MyQwen2.5-3B"
-GEMMA_MODEL_NAME="MyGemma-3-4B-it"
-MODEL_NAMES=("${QWEN_MODEL_NAME}" "${GEMMA_MODEL_NAME}")
-HF_IDS=("${QWEN_HF_ID}"          "${GEMMA_HF_ID}")
+MODEL_NAMES=("MyQwen2.5-3B" "MyGemma-3-4B-it")
+declare -A HF_ID=(
+    [MyQwen2.5-3B]="Qwen/Qwen2.5-3B"
+    [MyGemma-3-4B-it]="google/gemma-3-4b-it"
+)
+declare -A WAIT_TOKEN_L1=(
+    [MyQwen2.5-3B]="<|endoftext|> % #"
+    [MyGemma-3-4B-it]="<eos> % #"
+)
+declare -A MODEL_LAYERS=(
+    [MyQwen2.5-3B]="0 1 2 4 6 8 10 12 14 16 18 20 22 25 28 31 33 35"
+    [MyGemma-3-4B-it]="0 1 2 4 6 8 10 12 14 16 18 20 22 25 28 31 33"
+)
 
 MODELS_DIR="mymodels"
 HF_CACHE_DIR=""
@@ -18,21 +25,16 @@ VISUALIZE_DIR="visualize"
 DATASET_DIR="mydataset"
 TASKS_DIR="mytasks"
 
-S_LIMIT=200
-WORD_LIMIT=5
-LIMIT_GSM8K=2000
-LIMIT_CRUXEVAL=500
+S_LIMIT=200        # samples for build_vectors.py
+WORD_LIMIT=5       # words for reselect_words.py
+LIMIT_GSM8K=2000   # samples for lm_eval on gsm8k
+LIMIT_CRUXEVAL=500 # samples for lm_eval on cruxeval
 
 WAIT_TOKEN_L2="Wait Alternatively Check"
-WAIT_TOKEN_L1_QWEN="<|endoftext|> % #"
-WAIT_TOKEN_L1_GEMMA="<eos> % #"
 WAIT_TOKEN_L0="Answer Result Output"
 
 TASK_WORDS_LEVELS=("Wait" "Alternatively" "Check" "<|endoftext|>" "#" "%" "Answer" "Output" "Result")
 TASK_NAMES=("gsm8k_adv" "cruxeval_o_adv")
-
-LAYERS_QWEN=(0 1 2 4 6 8 10 12 14 16 18 20 22 25 28 31 33 35)
-LAYERS_GEMMA=(0 1 2 4 6 8 10 12 14 16 18 20 22 25 28 31 33)
 
 TASK_WORDS_POSITIVE=("<|endoftext|>" "Answer" "#" "%" "Output" "Result")
 TASK_WORDS_NEGATIVE=("Wait" "<|endoftext|>" "Alternatively" "Check" "#" "%")
@@ -91,6 +93,43 @@ run_steered() {
     fi
 }
 
+build_one_vector() {
+    local input_file=$1 hf_id=$2 out_dir=$3; shift 3
+    python3 build_vectors.py \
+        --input_file="${input_file}" --model_name="${hf_id}" "${CACHE_ARG[@]}" \
+        --output_dir="${out_dir}" --limit "${S_LIMIT}" \
+        "$@"
+}
+
+eval_word_file() {
+    local word_file=$1 task_name=$2 model_name=$3 step=$4 max_words=${5:-0}
+    [ ! -f "${word_file}" ] && return 0
+    local j=0
+    while IFS= read -r task_word; do
+        [ -z "${task_word}" ] && continue
+        if [ "${max_words}" -gt 0 ] && [ "${j}" -ge "${max_words}" ]; then break; fi
+        run_gt "${LIMIT_GSM8K}" "${task_name}" "${task_word}" \
+            "${TASK_THREAD_ID}" "${model_name}" "${step}"
+        j=$((j + 1))
+    done < "${word_file}"
+}
+
+steer_direction() {
+    local model_name=$1 task_name=$2 limit=$3 c_scale=$4 words_var=$5 suffixes_var=$6
+    shift 6
+    local layers=("$@")
+    local words_ref="${words_var}[@]" suffixes_ref="${suffixes_var}[@]"
+    for l in "${layers[@]}"; do
+        for task_word in "${!words_ref}"; do
+            for s_suffix in "${!suffixes_ref}"; do
+                local steer_file="${VISUALIZE_DIR}/${task_name}/${model_name}/step2/steer_${S_LIMIT}_${s_suffix}/seed_avg.json"
+                run_steered "${limit}" "${task_name}" "${task_word}" "${TASK_THREAD_ID}" \
+                    "${model_name}" "step4" "${l}" "${c_scale}" "${steer_file}" "${s_suffix}"
+            done
+        done
+    done
+}
+
 # -- preprocess ---------------------------------------------------------------
 
 echo "preprocess"
@@ -116,46 +155,22 @@ done
 # -- build steering vectors ---------------------------------------------------
 
 echo "build steering vectors"
-for i in "${!MODEL_NAMES[@]}"; do
-    model_name="${MODEL_NAMES[$i]}"
-    hf_id="${HF_IDS[$i]}"
-    if [ "${model_name}" = "${QWEN_MODEL_NAME}" ]; then
-        wait_token_l1="${WAIT_TOKEN_L1_QWEN}"
-    else
-        wait_token_l1="${WAIT_TOKEN_L1_GEMMA}"
-    fi
+for model_name in "${MODEL_NAMES[@]}"; do
+    hf_id="${HF_ID[${model_name}]}"
+    wait_token_l1="${WAIT_TOKEN_L1[${model_name}]}"
 
     for task_name in "${TASK_NAMES[@]}"; do
         input_file="${VISUALIZE_DIR}/${task_name}/step0/${task_name}.json"
         output_dir="${VISUALIZE_DIR}/${task_name}/${model_name}/step2"
 
-        # L2-L0
-        python3 build_vectors.py \
-            --input_file="${input_file}" --model_name="${hf_id}" "${CACHE_ARG[@]}" \
-            --output_dir="${output_dir}/steer_${S_LIMIT}_20" \
-            --wait_token_1 ${WAIT_TOKEN_L2} --wait_token_2 ${WAIT_TOKEN_L0} \
-            --limit "${S_LIMIT}"
-
-        # L2-L1
-        python3 build_vectors.py \
-            --input_file="${input_file}" --model_name="${hf_id}" "${CACHE_ARG[@]}" \
-            --output_dir="${output_dir}/steer_${S_LIMIT}_21" \
-            --wait_token_1 ${WAIT_TOKEN_L2} --wait_token_2 ${wait_token_l1} \
-            --limit "${S_LIMIT}"
-
-        # L1-L0
-        python3 build_vectors.py \
-            --input_file="${input_file}" --model_name="${hf_id}" "${CACHE_ARG[@]}" \
-            --output_dir="${output_dir}/steer_${S_LIMIT}_10" \
-            --wait_token_1 ${wait_token_l1} --wait_token_2 ${WAIT_TOKEN_L0} \
-            --limit "${S_LIMIT}"
-
-        # embedding baseline
-        python3 build_vectors.py \
-            --input_file="${input_file}" --model_name="${hf_id}" "${CACHE_ARG[@]}" \
-            --is_baseline=1 --output_dir="${output_dir}/steer_baseline" \
-            --wait_token_1 ${WAIT_TOKEN_L2} --wait_token_2 "" \
-            --limit "${S_LIMIT}"
+        build_one_vector "${input_file}" "${hf_id}" "${output_dir}/steer_${S_LIMIT}_20" \
+            --wait_token_1 ${WAIT_TOKEN_L2} --wait_token_2 ${WAIT_TOKEN_L0}
+        build_one_vector "${input_file}" "${hf_id}" "${output_dir}/steer_${S_LIMIT}_21" \
+            --wait_token_1 ${WAIT_TOKEN_L2} --wait_token_2 ${wait_token_l1}
+        build_one_vector "${input_file}" "${hf_id}" "${output_dir}/steer_${S_LIMIT}_10" \
+            --wait_token_1 ${wait_token_l1} --wait_token_2 ${WAIT_TOKEN_L0}
+        build_one_vector "${input_file}" "${hf_id}" "${output_dir}/steer_baseline" \
+            --is_baseline=1 --wait_token_1 ${WAIT_TOKEN_L2} --wait_token_2 ""
 
         for steer_type in "steer_${S_LIMIT}_21" "steer_${S_LIMIT}_20" "steer_${S_LIMIT}_10" "steer_baseline"; do
             python3 reselect_words.py \
@@ -170,37 +185,16 @@ done
 echo "instruction selection"
 TASK_NAME_STEP3="gsm8k_adv"
 for model_name in "${MODEL_NAMES[@]}"; do
-    if [ "${model_name}" = "${QWEN_MODEL_NAME}" ]; then
-        layers=("${LAYERS_QWEN[@]}")
-    else
-        layers=("${LAYERS_GEMMA[@]}")
-    fi
+    read -ra layers <<< "${MODEL_LAYERS[${model_name}]}"
+    steer_base="${VISUALIZE_DIR}/${TASK_NAME_STEP3}/${model_name}/step2"
 
-    # embedding baseline (layer = -1)
-    word_file="${VISUALIZE_DIR}/${TASK_NAME_STEP3}/${model_name}/step2/steer_baseline/word_-1.txt"
-    if [ -f "${word_file}" ]; then
-        while IFS= read -r task_word; do
-            [ -z "${task_word}" ] && continue
-            run_gt "${LIMIT_GSM8K}" "${TASK_NAME_STEP3}" "${task_word}" \
-                "${TASK_THREAD_ID}" "${model_name}" "step3"
-        done < "${word_file}"
-    fi
+    eval_word_file "${steer_base}/steer_baseline/word_-1.txt" \
+        "${TASK_NAME_STEP3}" "${model_name}" "step3"
 
-    # layer rank, top 8 words per layer
     for steer_type in "steer_${S_LIMIT}_21" "steer_${S_LIMIT}_20"; do
-        steer_dir="${VISUALIZE_DIR}/${TASK_NAME_STEP3}/${model_name}/step2/${steer_type}"
         for layer in "${layers[@]}"; do
-            word_file="${steer_dir}/word_${layer}.txt"
-            if [ ! -f "${word_file}" ]; then continue; fi
-            j=0
-            while IFS= read -r task_word; do
-                [ -z "${task_word}" ] && continue
-                if [ "${j}" -le 7 ]; then
-                    run_gt "${LIMIT_GSM8K}" "${TASK_NAME_STEP3}" "${task_word}" \
-                        "${TASK_THREAD_ID}" "${model_name}" "step3"
-                    j=$((j + 1))
-                fi
-            done < "${word_file}"
+            eval_word_file "${steer_base}/${steer_type}/word_${layer}.txt" \
+                "${TASK_NAME_STEP3}" "${model_name}" "step3" 8
         done
     done
 done
@@ -209,34 +203,15 @@ done
 
 echo "activation steering"
 for model_name in "${MODEL_NAMES[@]}"; do
-    if [ "${model_name}" = "${QWEN_MODEL_NAME}" ]; then
-        layers=("${LAYERS_QWEN[@]}")
-    else
-        layers=("${LAYERS_GEMMA[@]}")
-    fi
+    read -ra layers <<< "${MODEL_LAYERS[${model_name}]}"
 
     for task_name in "${TASK_NAMES[@]}"; do
         limit=$(get_limit "${task_name}")
 
-        for l in "${layers[@]}"; do
-            for task_word in "${TASK_WORDS_POSITIVE[@]}"; do
-                for s_suffix in "${STEER_SUFFIXES_POSITIVE[@]}"; do
-                    steer_file="${VISUALIZE_DIR}/${task_name}/${model_name}/step2/steer_${S_LIMIT}_${s_suffix}/seed_avg.json"
-                    run_steered "${limit}" "${task_name}" "${task_word}" "${TASK_THREAD_ID}" \
-                        "${model_name}" "step4" "${l}" "1" "${steer_file}" "${s_suffix}"
-                done
-            done
-        done
-
-        for l in "${layers[@]}"; do
-            for task_word in "${TASK_WORDS_NEGATIVE[@]}"; do
-                for s_suffix in "${STEER_SUFFIXES_NEGATIVE[@]}"; do
-                    steer_file="${VISUALIZE_DIR}/${task_name}/${model_name}/step2/steer_${S_LIMIT}_${s_suffix}/seed_avg.json"
-                    run_steered "${limit}" "${task_name}" "${task_word}" "${TASK_THREAD_ID}" \
-                        "${model_name}" "step4" "${l}" "-1" "${steer_file}" "${s_suffix}"
-                done
-            done
-        done
+        steer_direction "${model_name}" "${task_name}" "${limit}" "1" \
+            TASK_WORDS_POSITIVE STEER_SUFFIXES_POSITIVE "${layers[@]}"
+        steer_direction "${model_name}" "${task_name}" "${limit}" "-1" \
+            TASK_WORDS_NEGATIVE STEER_SUFFIXES_NEGATIVE "${layers[@]}"
     done
 done
 
