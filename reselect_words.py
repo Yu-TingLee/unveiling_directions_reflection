@@ -3,10 +3,8 @@ import copy
 import json
 import os
 import re
-
 from nltk.stem import PorterStemmer
 from nltk.stem import WordNetLemmatizer
-
 
 def check_vocab(check_list, w):
     cond0 = re.match('^[a-zA-Z]+$', w) is not None
@@ -28,8 +26,7 @@ def run(args):
     layer_embeds = json.load(open(input_file,"r"))
     ps = PorterStemmer()
     wnl = WordNetLemmatizer()
-    wait_token_1s = ["Wait", "Alternatively", "Check"]
-    #wait_token_1s += wait_token_1s+ [x.upper() for x in wait_token_1s]
+    wait_token_1s = list(args.exclude_words)
     for w in copy.deepcopy(wait_token_1s):
         w2 = normalize_word(ps, wnl, w)
         wait_token_1s.append(w2)
@@ -57,5 +54,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir", type=str, default="visualize/gsm8k_adv/step1/steer_5_2")
     parser.add_argument("--word_limit", type=int, default=20)
+    parser.add_argument("--exclude_words", nargs="+", default=["Wait", "Alternatively", "Check"],
+                        help="Seed words to exclude from the selected word list")
     args = parser.parse_args()
     run(args)

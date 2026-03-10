@@ -1,7 +1,6 @@
 from collections import defaultdict
 import difflib
 import re
-
 import numpy as np
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -33,9 +32,9 @@ def get_error_pos_sub(text1, text2):
 
 def test_difflib():
                     #0  1  2  3  4  5  6  7  8  9
-    cot_original=   [ 1, 2, 2, 2, 3, 4, 5, 6, 7, 9]
+    cot_original = [1, 2, 2, 2, 3, 4, 5, 6, 7, 9]
                     #0  1  2  3  4  5  6  7  8  9  10
-    cot_messy   =   [ 1, 5, 5, 5, 3, 4, 7, 6, 7, 8, 9]
+    cot_messy = [1, 5, 5, 5, 3, 4, 7, 6, 7, 8, 9]
     results = get_error_pos_sub(cot_original, cot_messy)
     print(results)
     pass

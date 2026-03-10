@@ -5,14 +5,11 @@ import json
 import os
 import re
 import random
-
 import numpy as np
 import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
-
-from myutils.my_utils import doc_to_text, cosine_sim, cot_preprocess
+from utils import doc_to_text, cosine_sim, cot_preprocess
 
 
 def init_model_hook_hidden_states(model):
@@ -32,9 +29,11 @@ def init_model_hook_hidden_states(model):
 
 
 def init_model(args, hook_hidden=True):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_dir, trust_remote_code=True, local_files_only=True)
-    model = AutoModelForCausalLM.from_pretrained(args.model_dir, trust_remote_code=True, ignore_mismatched_sizes=True,
-                                                 local_files_only=True)
+    hf_kwargs = {"trust_remote_code": True}
+    if args.cache_dir:
+        hf_kwargs["cache_dir"] = args.cache_dir
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name, **hf_kwargs)
+    model = AutoModelForCausalLM.from_pretrained(args.model_name, ignore_mismatched_sizes=True, **hf_kwargs)
 
     if hook_hidden:
         hidden_states = init_model_hook_hidden_states(model)
@@ -119,9 +118,6 @@ def get_forward(args, model, tokenizer, json_items, hidden_states, selected_laye
 
 
         check_len = tokenizer.encode(cot_preprocess(doc_to_text(json_item, json_item["cot_messy"], wait_token="None")))
-        #print(f"len1:{len(check_len)}")
-        #if len(check_len) > 400:
-        #    continue
 
         embed_w1 = defaultdict(list)
 
@@ -158,7 +154,6 @@ def get_forward(args, model, tokenizer, json_items, hidden_states, selected_laye
                         embed_w2[layer].append(ascore[0][0])
                     ascore.clear()
 
-            #outputs_temp = {}
             for layer in selected_layers:
                 wvecs = []
                 for ikey in range(len(wait_token_1s)):
@@ -298,7 +293,10 @@ def seed_everything(seed: int):
 def run():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", type=str, default="visualize/gsm8k_adv/step0/gsm8k_adv.json")
-    parser.add_argument("--model_dir", type=str, default="mymodels/MyQwen2.5-3B")
+    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-3B",
+                        help="HuggingFace model ID or path to a local model directory")
+    parser.add_argument("--cache_dir", type=str, default=None,
+                        help="Optional HuggingFace cache directory")
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--wait_token_1", type=str, default=["Wait", "Alternatively", "Check"], nargs='+')
     parser.add_argument("--wait_token_2", type=str, default=["Answer", "Result", "Output"], nargs='+')
