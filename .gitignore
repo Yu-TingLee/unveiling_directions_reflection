@@ -5,6 +5,4 @@ mymodels/
 mymodel/**/__pycache__/*
 mytasks/**/__pycache__/*
 mytasks/**/wait_token_*.txt
-test.sh
-visualize_test/
-venv/
+visualize_test/*

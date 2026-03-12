@@ -15,8 +15,8 @@ declare -A WAIT_TOKEN_L1=(
     [MyGemma-3-4B-it]="<eos> % #"
 )
 declare -A MODEL_LAYERS=(
-    [MyQwen2.5-3B]="0 1 2 4 6 8 10 12 14 16 18 20 22 25 28 31 33 35"
-    [MyGemma-3-4B-it]="0 1 2 4 6 8 10 12 14 16 18 20 22 25 28 31 33"
+    [MyQwen2.5-3B]="$(seq -s ' ' 0 35)"
+    [MyGemma-3-4B-it]="$(seq -s ' ' 0 33)"
 )
 
 MODELS_DIR="mymodels"

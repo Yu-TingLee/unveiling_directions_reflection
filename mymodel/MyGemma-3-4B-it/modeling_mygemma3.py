@@ -28,16 +28,16 @@ class MyGemma3ForConditionalGeneration(Gemma3ForConditionalGeneration):
         def hook(module, input, output):
             if self.steering_vec_dict is None:
                 return output
-            hidden_states = output[0]
-            if hidden_states.shape[1] > 1 and layer_id == self.steering_vec_layer:
+            # output is a tensor (batch, seq_len, hidden_size)
+            if output.shape[1] > 1 and layer_id == self.steering_vec_layer:
                 vec = torch.tensor(
                     self.steering_vec_dict[layer_id]
-                ).to(hidden_states.device).to(torch.float)
-                hidden_states = hidden_states + vec * self.steering_vec_scale
-                return (hidden_states,) + output[1:]
+                ).to(output.device).to(torch.float)
+                output = output.clone()
+                output[:, -vec.shape[0]:] += vec * self.steering_vec_scale
             return output
         return hook
 
     def _register_steering_hooks(self):
-        for layer_id, layer in enumerate(self.language_model.layers):
+        for layer_id, layer in enumerate(self.model.language_model.layers):
             layer.register_forward_hook(self._make_hook(layer_id))

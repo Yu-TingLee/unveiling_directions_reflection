@@ -23,7 +23,7 @@ def init_model_hook_hidden_states(model):
         for k, model_layer_k in enumerate(list(model.model.layers)):
             model_layer_k.register_forward_hook(gen_hook_func_hidden_states(layer_idx=k, hidden_states=hidden_states))
     elif "Gemma3" in model.__str__():
-        for k, model_layer_k in enumerate(list(model.language_model.layers)):
+        for k, model_layer_k in enumerate(list(model.model.language_model.layers)):
             model_layer_k.register_forward_hook(gen_hook_func_hidden_states(layer_idx=k, hidden_states=hidden_states))
     return hidden_states
 
@@ -58,7 +58,7 @@ def get_embed(args, model, tokenizer, json_items, wait_token_1s, wait_token_2s):
     if "Qwen" in model.__str__():
         w1_embeds = model.model.embed_tokens.forward(torch.Tensor(w1_ids).to(int).to(model.device)).cpu().detach().float().numpy()
     else:
-        w1_embeds = model.language_model.embed_tokens.forward(torch.Tensor(w1_ids).to(int).to(model.device)).cpu().detach().float().numpy()
+        w1_embeds = model.model.language_model.embed_tokens.forward(torch.Tensor(w1_ids).to(int).to(model.device)).cpu().detach().float().numpy()
 
 
     if len(wait_token_2s) > 0:
@@ -68,7 +68,7 @@ def get_embed(args, model, tokenizer, json_items, wait_token_1s, wait_token_2s):
         if "Qwen" in model.__str__():
             w2_embeds = model.model.embed_tokens.forward(torch.Tensor(w2_ids).to(int).to(model.device)).cpu().detach().float().numpy()
         else:
-            w2_embeds = model.language_model.embed_tokens.forward(torch.Tensor(w2_ids).to(int).to(model.device)).cpu().detach().float().numpy()
+            w2_embeds = model.model.language_model.embed_tokens.forward(torch.Tensor(w2_ids).to(int).to(model.device)).cpu().detach().float().numpy()
 
         wvecs = []
         for w1_embed in w1_embeds:
@@ -105,9 +105,8 @@ def get_forward(args, model, tokenizer, json_items, hidden_states, selected_laye
     output = defaultdict(int)
     success_sample = 0
     i = 0
+    pbar = tqdm(total=limit, desc="build vectors")
     while True:
-        if i%10 == 0:
-            print(f"current sample:{i},{success_sample}/{limit}")
         torch.cuda.empty_cache()
         json_item = json_items[i]
         i += 1
@@ -128,7 +127,7 @@ def get_forward(args, model, tokenizer, json_items, hidden_states, selected_laye
 
             for layer, ascore in hidden_states.items():
                 if layer in selected_layers:
-                    embed_w1[layer].append(ascore[0][0])
+                    embed_w1[layer].append(ascore[0])
                 ascore.clear()
 
         if len(wait_token_2s) > 0:
@@ -147,7 +146,7 @@ def get_forward(args, model, tokenizer, json_items, hidden_states, selected_laye
 
                 for layer, ascore in hidden_states.items():
                     if layer in selected_layers:
-                        embed_w2[layer].append(ascore[0][0])
+                        embed_w2[layer].append(ascore[0])
                     ascore.clear()
 
             for layer in selected_layers:
@@ -170,8 +169,9 @@ def get_forward(args, model, tokenizer, json_items, hidden_states, selected_laye
                     wvecs.append(wvec)
                 output[layer] += np.array(wvecs)*(1/limit)
         success_sample += 1
-        #print(f"success_sample:{success_sample}")
+        pbar.update(1)
         if success_sample >= limit:
+            pbar.close()
             return output
     return output
 
@@ -190,7 +190,7 @@ def get_embed_sim(args, model, tokenizer, hidden_states, output_dir):
     elif "Qwen" in model.__str__():
         selected_layers = list(range(model.model.config.num_hidden_layers))
     else:
-        selected_layers = list(range(len(model.language_model.layers)))
+        selected_layers = list(range(len(model.model.language_model.layers)))
 
     wait_token_1s = args.wait_token_1#["Wait", "Alternatively", "Check"]
     wait_token_2s = args.wait_token_2#[]
@@ -250,6 +250,9 @@ def get_embed_sim(args, model, tokenizer, hidden_states, output_dir):
     for layer in vec_knowns.keys():
         vec_known[layer] = np.average(vec_knowns[layer], axis=0)
 
+    json.dump(dict((x, y.tolist()) for x, y in vec_known.items()), open(os.path.join(output_dir, "seed_avg.json"), "w"), indent=2)
+    json.dump(dict((x, y.tolist()) for x, y in vec_knowns.items()), open(os.path.join(output_dir, "seed_per_vec.json"), "w"), indent=2)
+
     batch_size = 1
 
     all_words = [x[0] for x in results]
@@ -308,6 +311,10 @@ def run():
 
     output_dir = args.output_dir
     os.makedirs(output_dir,exist_ok=True)
+
+    if os.path.exists(os.path.join(output_dir, "result_layers.json")):
+        print(f"Skipping {output_dir}: result_layers.json already exists.")
+        return
 
     model, tokenizer, hidden_states = init_model(args)
 
